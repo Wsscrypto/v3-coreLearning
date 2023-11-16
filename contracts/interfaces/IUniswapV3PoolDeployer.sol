@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity >=0.5.0;
 
-/// @title An interface for a contract that is capable of deploying Uniswap V3 Pools
-/// @notice A contract that constructs a pool must implement this to pass arguments to the pool
-/// @dev This is used to avoid having constructor arguments in the pool contract, which results in the init code hash
-/// of the pool being constant allowing the CREATE2 address of the pool to be cheaply computed on-chain
+/// @title 合约接口，实现这些接口，就能具备部署pool的功能
+/// @dev 这用于避免在pool合约中包含构造函数参数，这让pool的初始化代码哈希保持不变，从而允许在链上廉价地计算pool的 CREATE2 地址
 interface IUniswapV3PoolDeployer {
-    /// @notice Get the parameters to be used in constructing the pool, set transiently during pool creation.
-    /// @dev Called by the pool constructor to fetch the parameters of the pool
-    /// Returns factory The factory address
-    /// Returns token0 The first token of the pool by address sort order
-    /// Returns token1 The second token of the pool by address sort order
-    /// Returns fee The fee collected upon every swap in the pool, denominated in hundredths of a bip
-    /// Returns tickSpacing The minimum number of ticks between initialized ticks
+    /// @notice 获取构建pool时使用的参数，在pool创建期间临时设置。
+    /// @dev 由pool构建者调用，用于获取pool相关参数
+    /// Returns factory factory 地址
+    /// Returns token0 
+    /// Returns token1 
+    /// Returns fee 
+    /// Returns tickSpacing 
     function parameters()
         external
         view

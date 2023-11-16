@@ -15,15 +15,15 @@ contract UniswapV3PoolDeployer is IUniswapV3PoolDeployer {
     }
 
     /// @inheritdoc IUniswapV3PoolDeployer
-    Parameters public override parameters;
+    /// 直接用一个struct代替function做接口
+    Parameters public override parameters; 
 
-    /// @dev Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
-    /// clearing it after deploying the pool.
-    /// @param factory The contract address of the Uniswap V3 factory
-    /// @param token0 The first token of the pool by address sort order
-    /// @param token1 The second token of the pool by address sort order
-    /// @param fee The fee collected upon every swap in the pool, denominated in hundredths of a bip
-    /// @param tickSpacing The spacing between usable ticks
+    /// @dev 用输入的参数部署pool，部署完删除参数
+    /// @param factory 
+    /// @param token0 
+    /// @param token1 
+    /// @param fee 
+    /// @param tickSpacing 
     function deploy(
         address factory,
         address token0,
@@ -32,6 +32,7 @@ contract UniswapV3PoolDeployer is IUniswapV3PoolDeployer {
         int24 tickSpacing
     ) internal returns (address pool) {
         parameters = Parameters({factory: factory, token0: token0, token1: token1, fee: fee, tickSpacing: tickSpacing});
+        //salt 用于预计算地址，详情可见：https://ethereum.stackexchange.com/questions/125555/what-does-keyword-salt-mean-in-solidity
         pool = address(new UniswapV3Pool{salt: keccak256(abi.encode(token0, token1, fee))}());
         delete parameters;
     }
