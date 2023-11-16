@@ -1,35 +1,32 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity >=0.5.0;
 
-/// @title Pool state that never changes
-/// @notice These parameters are fixed for a pool forever, i.e., the methods will always return the same values
+/// @title 不可更改的pool状态变量
+/// @notice 这些参数永远不会变
 interface IUniswapV3PoolImmutables {
-    /// @notice The contract that deployed the pool, which must adhere to the IUniswapV3Factory interface
-    /// @return The contract address
+    /// @notice 部署这个pool的factory合约地址
+    /// @return factory合约地址
     function factory() external view returns (address);
 
-    /// @notice The first of the two tokens of the pool, sorted by address
-    /// @return The token contract address
+    /// @notice pool对中地址较小的合约token0
+    /// @return token0地址
     function token0() external view returns (address);
 
-    /// @notice The second of the two tokens of the pool, sorted by address
-    /// @return The token contract address
+    /// @notice pool对中地址较大的合约token1
+    /// @return token1地址
     function token1() external view returns (address);
 
-    /// @notice The pool's fee in hundredths of a bip, i.e. 1e-6
-    /// @return The fee
+    /// @notice 费率，0.0001为基数
+    /// @return 返回费率水平
     function fee() external view returns (uint24);
 
-    /// @notice The pool tick spacing
-    /// @dev Ticks can only be used at multiples of this value, minimum of 1 and always positive
-    /// e.g.: a tickSpacing of 3 means ticks can be initialized every 3rd tick, i.e., ..., -6, -3, 0, 3, 6, ...
-    /// This value is an int24 to avoid casting even though it is always positive.
-    /// @return The tick spacing
+    /// @notice tickspacing
+    /// @dev 最小为1的正数，如 tickspacing为3，则tick只能取3的倍数如 -6 -3 0 3 6 ......
+    /// @return tickspacing
     function tickSpacing() external view returns (int24);
 
-    /// @notice The maximum amount of position liquidity that can use any tick in the range
-    /// @dev This parameter is enforced per tick to prevent liquidity from overflowing a uint128 at any point, and
-    /// also prevents out-of-range liquidity from being used to prevent adding in-range liquidity to a pool
-    /// @return The max amount of liquidity per tick
+    /// @notice 价格位于任意tick时，可以使用的或可以填加的流动性的最大值
+    /// @dev 避免数值溢出 uint128
+    /// @return tick中流动性最大值
     function maxLiquidityPerTick() external view returns (uint128);
 }

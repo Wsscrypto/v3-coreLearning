@@ -1,23 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity >=0.5.0;
 
-/// @title Pool state that can change
-/// @notice These methods compose the pool's state, and can change with any frequency including multiple times
-/// per transaction
+/// @title pool 中可更改的状态变量
+/// @notice 以下方法用于访问可更改的pool状态变量
 interface IUniswapV3PoolState {
-    /// @notice The 0th storage slot in the pool stores many values, and is exposed as a single method to save gas
-    /// when accessed externally.
-    /// @return sqrtPriceX96 The current price of the pool as a sqrt(token1/token0) Q64.96 value
-    /// tick The current tick of the pool, i.e. according to the last tick transition that was run.
-    /// This value may not always be equal to SqrtTickMath.getTickAtSqrtRatio(sqrtPriceX96) if the price is on a tick
-    /// boundary.
-    /// observationIndex The index of the last oracle observation that was written,
+    /// @notice 0 号storage，用于存放若干变量，并提供统一的访问接口
+    /// @return sqrtPriceX96 代表当前pool的价格的开根号值，用Q64.96格式表示，共160位，64位为正数部分，96位小数部分
+    /// tick 当前pool的tick，当price在边界的时候，可能SqrtTickMath.getTickAtSqrtRatio(sqrtPriceX96)不一定等于这个tick值
+    /// observationIndex 最后一个预言机观察点 index
     /// observationCardinality The current maximum number of observations stored in the pool,
     /// observationCardinalityNext The next maximum number of observations, to be updated when the observation.
-    /// feeProtocol The protocol fee for both tokens of the pool.
-    /// Encoded as two 4 bit values, where the protocol fee of token1 is shifted 4 bits and the protocol fee of token0
-    /// is the lower 4 bits. Used as the denominator of a fraction of the swap fee, e.g. 4 means 1/4th of the swap fee.
-    /// unlocked Whether the pool is currently locked to reentrancy
+    /// feeProtocol 协议费用，从交易手续费里扣；为8bit，高4位是token0，低4位给token1，如高4位等于8，则收费为1/8
+    /// unlocked 当前pool是否上锁，避免重入攻击
     function slot0()
         external
         view
@@ -39,19 +33,18 @@ interface IUniswapV3PoolState {
     /// @dev This value can overflow the uint256
     function feeGrowthGlobal1X128() external view returns (uint256);
 
-    /// @notice The amounts of token0 and token1 that are owed to the protocol
-    /// @dev Protocol fees will never exceed uint128 max in either token
+    /// @notice 协议收取的 token0 和 token1数量，是收益
+    /// @dev 每种token的协议费用不会超过 uint128 最大值
     function protocolFees() external view returns (uint128 token0, uint128 token1);
 
-    /// @notice The currently in range liquidity available to the pool
-    /// @dev This value has no relationship to the total liquidity across all ticks
+    /// @notice 当前可用的流动性数量
+    /// @dev 这个值和所有tick的总流动性无关
     function liquidity() external view returns (uint128);
 
-    /// @notice Look up information about a specific tick in the pool
-    /// @param tick The tick to look up
-    /// @return liquidityGross the total amount of position liquidity that uses the pool either as tick lower or
-    /// tick upper,
-    /// liquidityNet how much liquidity changes when the pool price crosses the tick,
+    /// @notice 特定某个tick的状态
+    /// @param tick 需要查看的tick
+    /// @return liquidityGross 当前tick上可以访问的所有流动性，不只是以该tick为边界的流动性
+    /// liquidityNet 跨越本tick时，将产生的流动性变化
     /// feeGrowthOutside0X128 the fee growth on the other side of the tick from the current tick in token0,
     /// feeGrowthOutside1X128 the fee growth on the other side of the tick from the current tick in token1,
     /// tickCumulativeOutside the cumulative tick value on the other side of the tick from the current tick
