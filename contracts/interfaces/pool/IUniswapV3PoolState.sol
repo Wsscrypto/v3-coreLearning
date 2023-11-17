@@ -45,8 +45,8 @@ interface IUniswapV3PoolState {
     /// @param tick 需要查看的tick
     /// @return liquidityGross 当前tick上可以访问的所有流动性，不只是以该tick为边界的流动性
     /// liquidityNet 跨越本tick时，将产生的流动性变化
-    /// feeGrowthOutside0X128 the fee growth on the other side of the tick from the current tick in token0,
-    /// feeGrowthOutside1X128 the fee growth on the other side of the tick from the current tick in token1,
+    /// feeGrowthOutside0X128 当前tick外部产生token0的费用，用于计算区间费用，逻辑复杂：https://mp.weixin.qq.com/s?__biz=MzU5MzMxNTk2Nw==&mid=2247487594&idx=1&sn=b3e00f41f2016aa38d27d2d296c65f30&chksm=fe13017ac964886c115fd84d18d1df2cbbaf6294a484186450130a3f4bad5c4fc2e9e6fb119d&scene=21#wechat_redirect
+    /// feeGrowthOutside1X128 当前tick外部产生token1的费用
     /// tickCumulativeOutside the cumulative tick value on the other side of the tick from the current tick
     /// secondsPerLiquidityOutsideX128 the seconds spent per liquidity on the other side of the tick from the current tick,
     /// secondsOutside the seconds spent on the other side of the tick from the current tick,

@@ -1,25 +1,24 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 pragma solidity >=0.5.0;
 
-/// @title Permissionless pool actions
-/// @notice Contains pool methods that can be called by anyone
+/// @title pool 允许执行的无许可操作
+/// @notice 任何人都可以对pool执行的操作
 interface IUniswapV3PoolActions {
-    /// @notice Sets the initial price for the pool
-    /// @dev Price is represented as a sqrt(amountToken1/amountToken0) Q64.96 value
-    /// @param sqrtPriceX96 the initial sqrt price of the pool as a Q64.96
+    /// @notice 设置pool的初始价格
+    /// @dev 价格以 token1/token0 的根号形式表示；是Q64.96值
+    /// @param sqrtPriceX96 需要设置的初始价格
     function initialize(uint160 sqrtPriceX96) external;
 
-    /// @notice Adds liquidity for the given recipient/tickLower/tickUpper position
-    /// @dev The caller of this method receives a callback in the form of IUniswapV3MintCallback#uniswapV3MintCallback
-    /// in which they must pay any token0 or token1 owed for the liquidity. The amount of token0/token1 due depends
-    /// on tickLower, tickUpper, the amount of liquidity, and the current price.
-    /// @param recipient The address for which the liquidity will be created
-    /// @param tickLower The lower tick of the position in which to add liquidity
-    /// @param tickUpper The upper tick of the position in which to add liquidity
-    /// @param amount The amount of liquidity to mint
-    /// @param data Any data that should be passed through to the callback
-    /// @return amount0 The amount of token0 that was paid to mint the given amount of liquidity. Matches the value in the callback
-    /// @return amount1 The amount of token1 that was paid to mint the given amount of liquidity. Matches the value in the callback
+    /// @notice 给定tickL 和 tickU 和 接收者地址 来添加流动性
+    /// @dev 调用mint函数的调用者，必须实现 IUniswapV3MintCallback#uniswapV3MintCallback  接口，在接口内
+    /// 调用者要支付本次mint流动性的 token0 和 token1 ，需要支付的数量取决于 tickL 和 tickU 以及要添加的流动性数量和当前的价格。
+    /// @param recipient 流动性归属地址
+    /// @param tickLower tickL
+    /// @param tickUpper tickU
+    /// @param amount 要mint的流动性数量
+    /// @param data 需要传递给callback的数据
+    /// @return amount0 需要支付给流动性mint 的token0 数量
+    /// @return amount1 需要支付给流动性mint 的token1 数量
     function mint(
         address recipient,
         int24 tickLower,
@@ -28,7 +27,7 @@ interface IUniswapV3PoolActions {
         bytes calldata data
     ) external returns (uint256 amount0, uint256 amount1);
 
-    /// @notice Collects tokens owed to a position
+    /// @notice 取回代币功能
     /// @dev Does not recompute fees earned, which must be done either via mint or burn of any amount of liquidity.
     /// Collect must be called by the position owner. To withdraw only token0 or only token1, amount0Requested or
     /// amount1Requested may be set to zero. To withdraw all tokens owed, caller may pass any value greater than the
