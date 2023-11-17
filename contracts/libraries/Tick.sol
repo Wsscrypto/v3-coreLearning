@@ -8,39 +8,34 @@ import './TickMath.sol';
 import './LiquidityMath.sol';
 
 /// @title Tick
-/// @notice Contains functions for managing tick processes and relevant calculations
+/// @notice Tick 处理和相关的计算方法
 library Tick {
     using LowGasSafeMath for int256;
     using SafeCast for int256;
 
-    // info stored for each initialized individual tick
+    // 存储初始化后的某个 Tick 自己的信息
     struct Info {
-        // the total position liquidity that references this tick
+        // 所有和本 Tick 相关的流动性，不单单是以本 Tick 为边界的头寸
         uint128 liquidityGross;
-        // amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left),
+        // 以本 Tick 为边界的流动性，穿越这个 Tick 则会新增或减少流动性
         int128 liquidityNet;
-        // fee growth per unit of liquidity on the _other_ side of this tick (relative to the current tick)
-        // only has relative meaning, not absolute — the value depends on when the tick is initialized
+        // 本 Tick 以外的流动性费用
         uint256 feeGrowthOutside0X128;
         uint256 feeGrowthOutside1X128;
-        // the cumulative tick value on the other side of the tick
+        // oracle 相关变量；用预言机的 tickCumulative 减去价格区间两边 tick 上的该变量，除以做市时长，就能得出该区间平均的做市价格（tick 序号）
         int56 tickCumulativeOutside;
-        // the seconds per unit of liquidity on the _other_ side of this tick (relative to the current tick)
-        // only has relative meaning, not absolute — the value depends on when the tick is initialized
+        // oracle 相关变量； 用预言机的 secondsPerLiquidityCumulative 减去价格区间两边 tick 上的该变量，就是该区间内的每单位流动性的做市时长（使用该结果乘以你的流动性数量，得出你的流动性参与的做市时长，这个时长比上 1 的结果，就是你在该区间赚取的手续费比例）。
         uint160 secondsPerLiquidityOutsideX128;
-        // the seconds spent on the other side of the tick (relative to the current tick)
-        // only has relative meaning, not absolute — the value depends on when the tick is initialized
+        // oracle 相关变量；用池子创建以来的总时间减去价格区间两边 tick 上的该变量，就能得出该区间做市的总时长
         uint32 secondsOutside;
-        // true iff the tick is initialized, i.e. the value is exactly equivalent to the expression liquidityGross != 0
-        // these 8 bits are set to prevent fresh sstores when crossing newly initialized ticks
+        // 是否初始化
         bool initialized;
     }
 
-    /// @notice Derives max liquidity per tick from given tick spacing
-    /// @dev Executed within the pool constructor
-    /// @param tickSpacing The amount of required tick separation, realized in multiples of `tickSpacing`
-    ///     e.g., a tickSpacing of 3 requires ticks to be initialized every 3rd tick i.e., ..., -6, -3, 0, 3, 6, ...
-    /// @return The max liquidity per tick
+    /// @notice 指定 Tickspcing 下，每个 tick 的最大流动性
+    /// @dev 在 pool 初始化时调用
+    /// @param tickSpacing 
+    /// @return 每个 tick 的最大流动性
     function tickSpacingToMaxLiquidityPerTick(int24 tickSpacing) internal pure returns (uint128) {
         int24 minTick = (TickMath.MIN_TICK / tickSpacing) * tickSpacing;
         int24 maxTick = (TickMath.MAX_TICK / tickSpacing) * tickSpacing;
@@ -48,15 +43,15 @@ library Tick {
         return type(uint128).max / numTicks;
     }
 
-    /// @notice Retrieves fee growth data
-    /// @param self The mapping containing all tick information for initialized ticks
-    /// @param tickLower The lower tick boundary of the position
-    /// @param tickUpper The upper tick boundary of the position
-    /// @param tickCurrent The current tick
-    /// @param feeGrowthGlobal0X128 The all-time global fee growth, per unit of liquidity, in token0
-    /// @param feeGrowthGlobal1X128 The all-time global fee growth, per unit of liquidity, in token1
-    /// @return feeGrowthInside0X128 The all-time fee growth in token0, per unit of liquidity, inside the position's tick boundaries
-    /// @return feeGrowthInside1X128 The all-time fee growth in token1, per unit of liquidity, inside the position's tick boundaries
+    /// @notice 获取tickL 和 tickU 之间的 费用数据
+    /// @param self 包含所有初始化的 tick 的 Info
+    /// @param tickLower tickL 
+    /// @param tickUpper tickU
+    /// @param tickCurrent 现在价格所对应的 tick 位置
+    /// @param feeGrowthGlobal0X128 token0的费用总数
+    /// @param feeGrowthGlobal1X128 token1的费用总数
+    /// @return feeGrowthInside0X128 流动性区间内，token0的费用
+    /// @return feeGrowthInside1X128 流动性区间内，token1的费用
     function getFeeGrowthInside(
         mapping(int24 => Tick.Info) storage self,
         int24 tickLower,
@@ -94,19 +89,19 @@ library Tick {
         feeGrowthInside1X128 = feeGrowthGlobal1X128 - feeGrowthBelow1X128 - feeGrowthAbove1X128;
     }
 
-    /// @notice Updates a tick and returns true if the tick was flipped from initialized to uninitialized, or vice versa
-    /// @param self The mapping containing all tick information for initialized ticks
-    /// @param tick The tick that will be updated
-    /// @param tickCurrent The current tick
-    /// @param liquidityDelta A new amount of liquidity to be added (subtracted) when tick is crossed from left to right (right to left)
-    /// @param feeGrowthGlobal0X128 The all-time global fee growth, per unit of liquidity, in token0
-    /// @param feeGrowthGlobal1X128 The all-time global fee growth, per unit of liquidity, in token1
-    /// @param secondsPerLiquidityCumulativeX128 The all-time seconds per max(1, liquidity) of the pool
-    /// @param tickCumulative The tick * time elapsed since the pool was first initialized
-    /// @param time The current block timestamp cast to a uint32
-    /// @param upper true for updating a position's upper tick, or false for updating a position's lower tick
-    /// @param maxLiquidity The maximum liquidity allocation for a single tick
-    /// @return flipped Whether the tick was flipped from initialized to uninitialized, or vice versa
+    /// @notice 更新 tick 信息，如果 tick 的初始化状态发生改变，则返回 true
+    /// @param self 包含所有初始化的 tick 的 Info
+    /// @param tick 将要更新信息的 tick
+    /// @param tickCurrent 现在价格所对应的 tick
+    /// @param liquidityDelta 穿越本 tick 将会增加或减少的流动性
+    /// @param feeGrowthGlobal0X128 总的token0流动性费用
+    /// @param feeGrowthGlobal1X128 总的token1流动性费用
+    /// @param secondsPerLiquidityCumulativeX128 每个流动性的做市时间
+    /// @param tickCumulative 过去的 tick 累加值
+    /// @param time 现在的区块时间戳
+    /// @param upper 如果更新的是 tickU 则为 true，tickL 则为 false
+    /// @param maxLiquidity 单个 tick 的最大流动性
+    /// @return flipped 是否发送初始化状态的改变，是则返回 true
     function update(
         mapping(int24 => Tick.Info) storage self,
         int24 tick,
@@ -143,28 +138,28 @@ library Tick {
 
         info.liquidityGross = liquidityGrossAfter;
 
-        // when the lower (upper) tick is crossed left to right (right to left), liquidity must be added (removed)
+        // liquidityNet 代表穿越tick时产生的总体流动性变化量
         info.liquidityNet = upper
             ? int256(info.liquidityNet).sub(liquidityDelta).toInt128()
             : int256(info.liquidityNet).add(liquidityDelta).toInt128();
     }
 
-    /// @notice Clears tick data
-    /// @param self The mapping containing all initialized tick information for initialized ticks
-    /// @param tick The tick that will be cleared
+    /// @notice 清空某个 tick 的初始化Info
+    /// @param self 包含所有初始化的 tick 的 Info
+    /// @param tick 要清空的 tick
     function clear(mapping(int24 => Tick.Info) storage self, int24 tick) internal {
         delete self[tick];
     }
 
-    /// @notice Transitions to next tick as needed by price movement
-    /// @param self The mapping containing all tick information for initialized ticks
-    /// @param tick The destination tick of the transition
-    /// @param feeGrowthGlobal0X128 The all-time global fee growth, per unit of liquidity, in token0
-    /// @param feeGrowthGlobal1X128 The all-time global fee growth, per unit of liquidity, in token1
+    /// @notice 穿过下个 tick
+    /// @param self 包含所有初始化的 tick 的 Info
+    /// @param tick 要穿过的 tick
+    /// @param feeGrowthGlobal0X128 token0总体费用
+    /// @param feeGrowthGlobal1X128 token0总体费用
     /// @param secondsPerLiquidityCumulativeX128 The current seconds per liquidity
     /// @param tickCumulative The tick * time elapsed since the pool was first initialized
-    /// @param time The current block.timestamp
-    /// @return liquidityNet The amount of liquidity added (subtracted) when tick is crossed from left to right (right to left)
+    /// @param time 现在的区块时间戳
+    /// @return liquidityNet 流动性在这个 tick 的变化量
     function cross(
         mapping(int24 => Tick.Info) storage self,
         int24 tick,

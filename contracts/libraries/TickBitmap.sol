@@ -4,7 +4,7 @@ pragma solidity >=0.5.0;
 import './BitMath.sol';
 
 /// @title Packed tick initialized state library
-/// @notice Stores a packed mapping of tick index to its initialized state
+/// @notice 存放tick与其对应的初始化信息
 /// @dev The mapping uses int16 for keys since ticks are represented as int24 and there are 256 (2^8) values per word.
 library TickBitmap {
     /// @notice Computes the position in the mapping where the initialized bit for a tick lives
