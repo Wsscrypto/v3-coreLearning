@@ -11,13 +11,10 @@ import './LiquidityMath.sol';
 library Position {
     // Position 的信息
     struct Info {
-        // 这个头寸拥有的流动性
-        uint128 liquidity;
-        // 每单位流动性具有的费用收益
-        uint256 feeGrowthInside0LastX128;
+        uint128 liquidity; // 在这个头寸拥有的流动性
+        uint256 feeGrowthInside0LastX128; // 每单位流动性具有的费用收益
         uint256 feeGrowthInside1LastX128;
-        // 用token形式表示的费用收益
-        uint128 tokensOwed0;
+        uint128 tokensOwed0;// 用token形式表示的费用收益
         uint128 tokensOwed1;
     }
 

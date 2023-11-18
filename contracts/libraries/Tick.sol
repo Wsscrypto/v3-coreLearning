@@ -93,11 +93,11 @@ library Tick {
     /// @param self 包含所有初始化的 tick 的 Info
     /// @param tick 将要更新信息的 tick
     /// @param tickCurrent 现在价格所对应的 tick
-    /// @param liquidityDelta 穿越本 tick 将会增加或减少的流动性
-    /// @param feeGrowthGlobal0X128 总的token0流动性费用
-    /// @param feeGrowthGlobal1X128 总的token1流动性费用
-    /// @param secondsPerLiquidityCumulativeX128 每个流动性的做市时间
-    /// @param tickCumulative 过去的 tick 累加值
+    /// @param liquidityDelta tick本次流动性变化量
+    /// @param feeGrowthGlobal0X128 总的token0流动性费率
+    /// @param feeGrowthGlobal1X128 总的token1流动性费率
+    /// @param secondsPerLiquidityCumulativeX128 全局每个流动性的做市时间
+    /// @param tickCumulative 全局tick时间累加值
     /// @param time 现在的区块时间戳
     /// @param upper 如果更新的是 tickU 则为 true，tickL 则为 false
     /// @param maxLiquidity 单个 tick 的最大流动性

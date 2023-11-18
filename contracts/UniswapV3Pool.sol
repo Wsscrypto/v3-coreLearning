@@ -37,70 +37,50 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     using Position for mapping(bytes32 => Position.Info);
     using Position for Position.Info;
     using Oracle for Oracle.Observation[65535];
+    ///************************************************************ */
+    /// pool 不可变数据
 
-    /// @inheritdoc IUniswapV3PoolImmutables
-    address public immutable override factory;
-    /// @inheritdoc IUniswapV3PoolImmutables
-    address public immutable override token0;
-    /// @inheritdoc IUniswapV3PoolImmutables
-    address public immutable override token1;
-    /// @inheritdoc IUniswapV3PoolImmutables
-    uint24 public immutable override fee;
+    address public immutable override factory; // 部署本 pool 的工厂合约地址
+    address public immutable override token0; // token0 地址
+    address public immutable override token1; // token1 地址
+    uint24 public immutable override fee; // pool 费率
+    int24 public immutable override tickSpacing;// pool 的 tickspacing
+    uint128 public immutable override maxLiquidityPerTick; // 每个 tick 的最大流动性
 
-    /// @inheritdoc IUniswapV3PoolImmutables
-    int24 public immutable override tickSpacing;
-
-    /// @inheritdoc IUniswapV3PoolImmutables
-    uint128 public immutable override maxLiquidityPerTick;
-
+    ///************************************************************ */
+    /// pool 动态数据
     struct Slot0 {
-        // the current price
-        uint160 sqrtPriceX96;
-        // the current tick
-        int24 tick;
-        // the most-recently updated index of the observations array
-        uint16 observationIndex;
-        // the current maximum number of observations that are being stored
-        uint16 observationCardinality;
-        // the next maximum number of observations to store, triggered in observations.write
-        uint16 observationCardinalityNext;
-        // the current protocol fee as a percentage of the swap fee taken on withdrawal
-        // represented as an integer denominator (1/x)%
-        uint8 feeProtocol;
-        // whether the pool is locked
-        bool unlocked;
+        uint160 sqrtPriceX96; // 现在的根号价格
+        int24 tick; //当前活跃的 tick
+        uint16 observationIndex; // 最近更新的 observation 序号
+        uint16 observationCardinality; // 现在最大的 observation 容量
+        uint16 observationCardinalityNext; //下个最大的 observation 容量
+        uint8 feeProtocol; // 当前协议费用的百分比，在swap fee 取款时计算；represented as an integer denominator (1/x)%
+        bool unlocked; //pool 是否被上锁
     }
-    /// @inheritdoc IUniswapV3PoolState
     Slot0 public override slot0;
 
-    /// @inheritdoc IUniswapV3PoolState
-    uint256 public override feeGrowthGlobal0X128;
-    /// @inheritdoc IUniswapV3PoolState
-    uint256 public override feeGrowthGlobal1X128;
+    uint256 public override feeGrowthGlobal0X128; //token0单位流动性全局费率
+    uint256 public override feeGrowthGlobal1X128; //token1单位流动性全局费率
 
-    // accumulated protocol fees in token0/token1 units
     struct ProtocolFees {
         uint128 token0;
         uint128 token1;
     }
-    /// @inheritdoc IUniswapV3PoolState
-    ProtocolFees public override protocolFees;
+    ProtocolFees public override protocolFees; //以token0 和 token1 计数的协议费用
 
-    /// @inheritdoc IUniswapV3PoolState
-    uint128 public override liquidity;
+    uint128 public override liquidity; // 当前可用最大流动性
 
-    /// @inheritdoc IUniswapV3PoolState
-    mapping(int24 => Tick.Info) public override ticks;
-    /// @inheritdoc IUniswapV3PoolState
-    mapping(int16 => uint256) public override tickBitmap;
-    /// @inheritdoc IUniswapV3PoolState
-    mapping(bytes32 => Position.Info) public override positions;
-    /// @inheritdoc IUniswapV3PoolState
-    Oracle.Observation[65535] public override observations;
+    mapping(int24 => Tick.Info) public override ticks; // tick们的信息
+    mapping(int16 => uint256) public override tickBitmap; // tick bitmap，用于判断tick是否初始化
+    mapping(bytes32 => Position.Info) public override positions;// 用户的头寸信息
+    Oracle.Observation[65535] public override observations; // oracle 观测点信息
+    
+    
+    ///************************************************************ */
+    /// pool 协议修饰器
 
-    /// @dev Mutually exclusive reentrancy protection into the pool to/from a method. This method also prevents entrance
-    /// to a function before the pool is initialized. The reentrancy guard is required throughout the contract because
-    /// we use balance checks to determine the payment status of interactions such as mint, swap and flash.
+    /// @dev 防止重入攻击，给协议函数上锁
     modifier lock() {
         require(slot0.unlocked, 'LOK');
         slot0.unlocked = false;
@@ -108,12 +88,16 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         slot0.unlocked = true;
     }
 
-    /// @dev Prevents calling a function from anyone except the address returned by IUniswapV3Factory#owner()
+    /// @dev 只允许部署 pool 的工厂合约所有者地址可以调用
     modifier onlyFactoryOwner() {
         require(msg.sender == IUniswapV3Factory(factory).owner());
         _;
     }
 
+    ///************************************************************ */
+    /// pool 协议逻辑
+
+    /// 构造函数
     constructor() {
         int24 _tickSpacing;
         (factory, token0, token1, fee, _tickSpacing) = IUniswapV3PoolDeployer(msg.sender).parameters();
@@ -122,21 +106,19 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         maxLiquidityPerTick = Tick.tickSpacingToMaxLiquidityPerTick(_tickSpacing);
     }
 
-    /// @dev Common checks for valid tick inputs.
+    /// @dev tickL 和 tickU 合法性计算
     function checkTicks(int24 tickLower, int24 tickUpper) private pure {
         require(tickLower < tickUpper, 'TLU');
         require(tickLower >= TickMath.MIN_TICK, 'TLM');
         require(tickUpper <= TickMath.MAX_TICK, 'TUM');
     }
 
-    /// @dev Returns the block timestamp truncated to 32 bits, i.e. mod 2**32. This method is overridden in tests.
+    /// @dev 返回当前时间戳，并转为 uint32 数值
     function _blockTimestamp() internal view virtual returns (uint32) {
-        return uint32(block.timestamp); // truncation is desired
+        return uint32(block.timestamp);
     }
 
-    /// @dev Get the pool's balance of token0
-    /// @dev This function is gas optimized to avoid a redundant extcodesize check in addition to the returndatasize
-    /// check
+    /// @dev 获取当前池子的 token0 余额
     function balance0() private view returns (uint256) {
         (bool success, bytes memory data) =
             token0.staticcall(abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(this)));
@@ -144,9 +126,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         return abi.decode(data, (uint256));
     }
 
-    /// @dev Get the pool's balance of token1
-    /// @dev This function is gas optimized to avoid a redundant extcodesize check in addition to the returndatasize
-    /// check
+    /// @dev 获取当前池子的 token1 余额
     function balance1() private view returns (uint256) {
         (bool success, bytes memory data) =
             token1.staticcall(abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(this)));
@@ -154,7 +134,9 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         return abi.decode(data, (uint256));
     }
 
-    /// @inheritdoc IUniswapV3PoolDerivedState
+    /// 主要是获取 oracle 相关的数据，这应该是提供一个外部接口，供外部协议查询
+    /// 输入tickL 和 tickU，得到区间内 （1）tick累计值、
+    /// （2）每单位流动性的做市时间 （3）整个区间总的做市时间
     function snapshotCumulativesInside(int24 tickLower, int24 tickUpper)
         external
         view
@@ -166,7 +148,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             uint32 secondsInside
         )
     {
-        checkTicks(tickLower, tickUpper);
+        checkTicks(tickLower, tickUpper); //检查tickL 和 tickU 的合法性
 
         int56 tickCumulativeLower;
         int56 tickCumulativeUpper;
@@ -232,7 +214,8 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         }
     }
 
-    /// @inheritdoc IUniswapV3PoolDerivedState
+    /// 获取 n 秒之间观察点的数据：（1）总的tick累计值（2）总的每单位流动性做市时间
+    /// 预言机记录的是全局数据，和某个区间无关，某个tick区间如果要计算数据，则要用边界tick的outside值来换算，逻辑略复杂
     function observe(uint32[] calldata secondsAgos)
         external
         view
@@ -251,7 +234,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             );
     }
 
-    /// @inheritdoc IUniswapV3PoolActions
+    /// 增加预言机观测点容量
     function increaseObservationCardinalityNext(uint16 observationCardinalityNext)
         external
         override
@@ -266,15 +249,11 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
     }
 
-    /// @inheritdoc IUniswapV3PoolActions
-    /// @dev not locked because it initializes unlocked
+    /// 初始化 pool
     function initialize(uint160 sqrtPriceX96) external override {
-        require(slot0.sqrtPriceX96 == 0, 'AI');
-
-        int24 tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
-
-        (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(_blockTimestamp());
-
+        require(slot0.sqrtPriceX96 == 0, 'AI'); //需要当前根号价格是0
+        int24 tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96); //获取当前tick
+        (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(_blockTimestamp());//初始化预言机，观测点容量为1
         slot0 = Slot0({
             sqrtPriceX96: sqrtPriceX96,
             tick: tick,
@@ -283,26 +262,23 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             observationCardinalityNext: cardinalityNext,
             feeProtocol: 0,
             unlocked: true
-        });
+        });//初始化pool变化量
 
         emit Initialize(sqrtPriceX96, tick);
     }
 
     struct ModifyPositionParams {
-        // the address that owns the position
-        address owner;
-        // the lower and upper tick of the position
-        int24 tickLower;
-        int24 tickUpper;
-        // any change in liquidity
-        int128 liquidityDelta;
+        address owner; //头寸（position）所有者地址
+        int24 tickLower; // 区间最低 tick 即 tickL
+        int24 tickUpper; // 区间最高 tick 即 tickU
+        int128 liquidityDelta; // 对流动性的变化量
     }
 
-    /// @dev Effect some changes to a position
-    /// @param params the position details and the change to the position's liquidity to effect
-    /// @return position a storage pointer referencing the position with the given owner and tick range
-    /// @return amount0 the amount of token0 owed to the pool, negative if the pool should pay the recipient
-    /// @return amount1 the amount of token1 owed to the pool, negative if the pool should pay the recipient
+    /// @dev 对某个流动性区间，进行流动性变更（增加、删除）
+    /// @param params 流动性区间变化所需参数，如上
+    /// @return position 用户在某个流动性区间所拥有的流动性数据
+    /// @return amount0 欠pool 的token0 数量，如果是负数，则是pool应该付钱
+    /// @return amount1 欠pool 的token1 数量，如果是负数，则是pool应该付钱
     function _modifyPosition(ModifyPositionParams memory params)
         private
         noDelegateCall
@@ -312,11 +288,11 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             int256 amount1
         )
     {
-        checkTicks(params.tickLower, params.tickUpper);
+        checkTicks(params.tickLower, params.tickUpper);// 检查tick合法性
 
         Slot0 memory _slot0 = slot0; // SLOAD for gas optimization
 
-        position = _updatePosition(
+        position = _updatePosition( //更新用户流动性信息
             params.owner,
             params.tickLower,
             params.tickUpper,
@@ -326,6 +302,8 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
 
         if (params.liquidityDelta != 0) {
             if (_slot0.tick < params.tickLower) {
+                // 现在的tick低于区间范围，
+                
                 // current tick is below the passed range; liquidity can only become in range by crossing from left to
                 // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
                 amount0 = SqrtPriceMath.getAmount0Delta(
@@ -371,11 +349,12 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         }
     }
 
-    /// @dev Gets and updates a position with the given liquidity delta
-    /// @param owner the owner of the position
-    /// @param tickLower the lower tick of the position's tick range
-    /// @param tickUpper the upper tick of the position's tick range
-    /// @param tick the current tick, passed to avoid sloads
+    /// @dev 更新并获取某用户在指定区间内的流动性信息
+    /// @param owner 用户地址
+    /// @param tickLower tickL
+    /// @param tickUpper tickU
+    /// @param liquidityDelta 流动性变化量
+    /// @param tick 当前活跃的tick
     function _updatePosition(
         address owner,
         int24 tickLower,
@@ -383,12 +362,12 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         int128 liquidityDelta,
         int24 tick
     ) private returns (Position.Info storage position) {
-        position = positions.get(owner, tickLower, tickUpper);
+        position = positions.get(owner, tickLower, tickUpper); //获取当前流动性信息
 
         uint256 _feeGrowthGlobal0X128 = feeGrowthGlobal0X128; // SLOAD for gas optimization
         uint256 _feeGrowthGlobal1X128 = feeGrowthGlobal1X128; // SLOAD for gas optimization
 
-        // if we need to update the ticks, do it
+        // 如果本次流动性变化量不为0，则更新tickL和tickU
         bool flippedLower;
         bool flippedUpper;
         if (liquidityDelta != 0) {
@@ -436,12 +415,14 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             }
         }
 
+        // 获取流动性区间内，单位流动性累计费率
         (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) =
             ticks.getFeeGrowthInside(tickLower, tickUpper, tick, _feeGrowthGlobal0X128, _feeGrowthGlobal1X128);
 
+        // 更新用户流动性信息
         position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
 
-        // clear any tick data that is no longer needed
+        // 如果是减少流动性，然后出现tick初始化状态变为未初始化，则清除tick信息
         if (liquidityDelta < 0) {
             if (flippedLower) {
                 ticks.clear(tickLower);

@@ -8,7 +8,7 @@ import './FullMath.sol';
 import './UnsafeMath.sol';
 import './FixedPoint96.sol';
 
-/// @title Functions based on Q64.96 sqrt price and liquidity
+/// @title 用于流动性和开根号价格的计算
 /// @notice Contains the math that uses square root of price as a Q64.96 and liquidity to compute deltas
 library SqrtPriceMath {
     using LowGasSafeMath for uint256;
@@ -20,11 +20,11 @@ library SqrtPriceMath {
     /// price less in order to not send too much output.
     /// The most precise formula for this is liquidity * sqrtPX96 / (liquidity +- amount * sqrtPX96),
     /// if this is impossible because of overflow, we calculate liquidity / (liquidity / sqrtPX96 +- amount).
-    /// @param sqrtPX96 The starting price, i.e. before accounting for the token0 delta
-    /// @param liquidity The amount of usable liquidity
-    /// @param amount How much of token0 to add or remove from virtual reserves
-    /// @param add Whether to add or remove the amount of token0
-    /// @return The price after adding or removing amount, depending on add
+    /// @param sqrtPX96 初始 sqrt price
+    /// @param liquidity 可用流动性
+    /// @param amount 从虚拟流动性中添加或删除的token0数量
+    /// @param add 是加还是减
+    /// @return token0数量变化后的sqrt price
     function getNextSqrtPriceFromAmount0RoundingUp(
         uint160 sqrtPX96,
         uint128 liquidity,
