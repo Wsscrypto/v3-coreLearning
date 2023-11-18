@@ -7,51 +7,51 @@ import './BitMath.sol';
 /// @notice 存放tick与其对应的初始化信息
 /// @dev The mapping uses int16 for keys since ticks are represented as int24 and there are 256 (2^8) values per word.
 library TickBitmap {
-    /// @notice Computes the position in the mapping where the initialized bit for a tick lives
-    /// @param tick The tick for which to compute the position
-    /// @return wordPos The key in the mapping containing the word in which the bit is stored
-    /// @return bitPos The bit position in the word where the flag is stored
+    /// @notice 计算某个 tick 在bitmap中的数据存储位置
+    /// @param tick 需要计算的tick
+    /// @return wordPos 存储 word 的位置
+    /// @return bitPos 存储 bit 的位置
     function position(int24 tick) private pure returns (int16 wordPos, uint8 bitPos) {
         wordPos = int16(tick >> 8);
         bitPos = uint8(tick % 256);
     }
 
-    /// @notice Flips the initialized state for a given tick from false to true, or vice versa
-    /// @param self The mapping in which to flip the tick
-    /// @param tick The tick to flip
-    /// @param tickSpacing The spacing between usable ticks
+    /// @notice 翻转初始化状态：初始化与未初始化
+    /// @param self 要翻转标志所在的数据
+    /// @param tick 
+    /// @param tickSpacing 
     function flipTick(
         mapping(int16 => uint256) storage self,
         int24 tick,
         int24 tickSpacing
     ) internal {
-        require(tick % tickSpacing == 0); // ensure that the tick is spaced
+        require(tick % tickSpacing == 0); // tick 能被 tickspacing 整除
         (int16 wordPos, uint8 bitPos) = position(tick / tickSpacing);
-        uint256 mask = 1 << bitPos;
+        uint256 mask = 1 << bitPos; // 1* 2** bitpos
         self[wordPos] ^= mask;
     }
 
-    /// @notice Returns the next initialized tick contained in the same word (or adjacent word) as the tick that is either
-    /// to the left (less than or equal to) or right (greater than) of the given tick
-    /// @param self The mapping in which to compute the next initialized tick
-    /// @param tick The starting tick
-    /// @param tickSpacing The spacing between usable ticks
-    /// @param lte Whether to search for the next initialized tick to the left (less than or equal to the starting tick)
-    /// @return next The next initialized or uninitialized tick up to 256 ticks away from the current tick
-    /// @return initialized Whether the next tick is initialized, as the function only searches within up to 256 ticks
+    /// @notice 返回下一个初始化的 tick ，先从同一个 word 中寻找，没有再找其他 word
+    /// @param self 存在下个 tick 的数据
+    /// @param tick 从这个 tick 开始找
+    /// @param tickSpacing 
+    /// @param lte 从左边开始找
+    /// @return next 如果存在已初始化的tick，则需要定位到masked中最高位的1；如果不存在，则返回当前方向最后一个tick
+    /// @return initialized 是否返回的 next 是初始化过的
     function nextInitializedTickWithinOneWord(
         mapping(int16 => uint256) storage self,
         int24 tick,
         int24 tickSpacing,
         bool lte
     ) internal view returns (int24 next, bool initialized) {
-        int24 compressed = tick / tickSpacing;
-        if (tick < 0 && tick % tickSpacing != 0) compressed--; // round towards negative infinity
+        int24 compressed = tick / tickSpacing; //取 tick / tickspacing 后的值
+
+        if (tick < 0 && tick % tickSpacing != 0) compressed--; //开始的 tick 可能不是合法的，向负无穷的方向舍入
 
         if (lte) {
             (int16 wordPos, uint8 bitPos) = position(compressed);
             // all the 1s at or to the right of the current bitPos
-            uint256 mask = (1 << bitPos) - 1 + (1 << bitPos);
+            uint256 mask = (1 << bitPos) - 1 + (1 << bitPos); //把小于等于 bitpos 的位全部置为1
             uint256 masked = self[wordPos] & mask;
 
             // if there are no initialized ticks to the right of or at the current tick, return rightmost in the word

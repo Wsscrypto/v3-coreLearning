@@ -5,28 +5,28 @@ import './FullMath.sol';
 import './FixedPoint128.sol';
 import './LiquidityMath.sol';
 
-/// @title Position
-/// @notice Positions represent an owner address' liquidity between a lower and upper tick boundary
-/// @dev Positions store additional state for tracking fees owed to the position
+/// @title 某个地址在某个区间的头寸：tickL 到 tickU 中间的区间
+/// @notice Positions 代表 某个地址在某个区间的头寸：tickL 到 tickU 中间的区间
+/// @dev Positions 也存放了这个区间拥有的swap费用收益
 library Position {
-    // info stored for each user's position
+    // Position 的信息
     struct Info {
-        // the amount of liquidity owned by this position
+        // 这个头寸拥有的流动性
         uint128 liquidity;
-        // fee growth per unit of liquidity as of the last update to liquidity or fees owed
+        // 每单位流动性具有的费用收益
         uint256 feeGrowthInside0LastX128;
         uint256 feeGrowthInside1LastX128;
-        // the fees owed to the position owner in token0/token1
+        // 用token形式表示的费用收益
         uint128 tokensOwed0;
         uint128 tokensOwed1;
     }
 
-    /// @notice Returns the Info struct of a position, given an owner and position boundaries
-    /// @param self The mapping containing all user positions
-    /// @param owner The address of the position owner
-    /// @param tickLower The lower tick boundary of the position
-    /// @param tickUpper The upper tick boundary of the position
-    /// @return position The position info struct of the given owners' position
+    /// @notice 获取某个address的头寸信息
+    /// @param self 存放所有用户头寸信息的数据
+    /// @param owner 用户地址
+    /// @param tickLower tickL
+    /// @param tickUpper tickU
+    /// @return position 用户拥有的相应头寸信息
     function get(
         mapping(bytes32 => Info) storage self,
         address owner,
@@ -36,11 +36,11 @@ library Position {
         position = self[keccak256(abi.encodePacked(owner, tickLower, tickUpper))];
     }
 
-    /// @notice Credits accumulated fees to a user's position
-    /// @param self The individual position to update
-    /// @param liquidityDelta The change in pool liquidity as a result of the position update
-    /// @param feeGrowthInside0X128 The all-time fee growth in token0, per unit of liquidity, inside the position's tick boundaries
-    /// @param feeGrowthInside1X128 The all-time fee growth in token1, per unit of liquidity, inside the position's tick boundaries
+    /// @notice 将累计费用计入用户头寸中；更新头寸的流动性和可取回代币，注意，该方法只会在mint和burn时被触发，swap并不会更新头寸信息。
+    /// @param self 某个position info
+    /// @param liquidityDelta 头寸更新导致的流动性变化
+    /// @param feeGrowthInside0X128 每单位流动性新费率
+    /// @param feeGrowthInside1X128 每单位流动性新费率
     function update(
         Info storage self,
         int128 liquidityDelta,
@@ -49,6 +49,7 @@ library Position {
     ) internal {
         Info memory _self = self;
 
+        // 计算新的流动性余额
         uint128 liquidityNext;
         if (liquidityDelta == 0) {
             require(_self.liquidity > 0, 'NP'); // disallow pokes for 0 liquidity positions
@@ -57,7 +58,7 @@ library Position {
             liquidityNext = LiquidityMath.addDelta(_self.liquidity, liquidityDelta);
         }
 
-        // calculate accumulated fees
+        // 计算新费率下应该增加的流动性费用是多少
         uint128 tokensOwed0 =
             uint128(
                 FullMath.mulDiv(
@@ -75,12 +76,12 @@ library Position {
                 )
             );
 
-        // update the position
+        // 更新流动性余额、费率、token费余额
         if (liquidityDelta != 0) self.liquidity = liquidityNext;
         self.feeGrowthInside0LastX128 = feeGrowthInside0X128;
         self.feeGrowthInside1LastX128 = feeGrowthInside1X128;
         if (tokensOwed0 > 0 || tokensOwed1 > 0) {
-            // overflow is acceptable, have to withdraw before you hit type(uint128).max fees
+            // 可能溢出，所以要定期取出流动性费用收益
             self.tokensOwed0 += tokensOwed0;
             self.tokensOwed1 += tokensOwed1;
         }
